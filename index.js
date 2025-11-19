@@ -1,5 +1,4 @@
 require('dotenv').config();
-
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -21,48 +20,34 @@ const client = new MongoClient(uri, {
   },
 });
 
-async function run() {
+async function startServer() {
   try {
-     await client.connect();
+    await client.connect();
+    console.log("Connected to MongoDB successfully!");
 
     const db = client.db("community");
     const complaintsCollection = db.collection("complaints");
     const userinfoCollection = db.collection("userinfo");
+    const contributionCollection = db.collection("contribution");
 
+    // Test route
+    app.get('/', (req, res) => res.send('Server is running fine!'));
 
-    // details
+    // ------------------- Complaints Routes -------------------
+
+    // Get single complaint
     app.get("/complaints/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const complaint = await complaintsCollection.findOne(query);
-      res.send(complaint);
-    });
-
-
-
-    // Get single user by email
-    app.get("/users/:email", async (req, res) => {
       try {
-        const email = req.params.email;
-        const user = await userinfoCollection.findOne(
-          { useremail: email },
-          { projection: { username: 1, useremail: 1, image: 1, contributed: 1 } }
-        );
-
-        if (!user) {
-          return res.status(404).send({ success: false, message: "User not found" });
-        }
-
-        res.send(user);
-      } catch (error) {
-        console.error("Error fetching user:", error);
+        const id = req.params.id;
+        if (!ObjectId.isValid(id)) return res.status(400).send({ success: false, message: "Invalid ID" });
+        const complaint = await complaintsCollection.findOne({ _id: new ObjectId(id) });
+        if (!complaint) return res.status(404).send({ success: false, message: "Complaint not found" });
+        res.send(complaint);
+      } catch (err) {
+        console.error(err);
         res.status(500).send({ success: false, message: "Server error" });
       }
     });
-
-
-
-
 
     // Get all complaints
     app.get('/complaints', async (req, res) => {
@@ -70,142 +55,28 @@ async function run() {
         const result = await complaintsCollection.find().toArray();
         res.send(result);
       } catch (error) {
+        console.error(error);
         res.status(500).send({ success: false, message: "Error fetching complaints" });
       }
     });
 
-    // User registration (signup)
-    app.post('/register', async (req, res) => {
-      try {
-        const { username, useremail, password, image } = req.body;
-
-        if (!username || !useremail || !password) {
-          return res.status(400).send({ success: false, message: "All fields required" });
-        }
-
-        // check if email exists
-        const existingUser = await userinfoCollection.findOne({ useremail });
-        if (existingUser) {
-          return res.status(409).send({ success: false, message: "Email already exists" });
-        }
-
-        // insert new user
-        await userinfoCollection.insertOne({ username, useremail, password, image });
-        res.send({ success: true, message: "User registered successfully" });
-
-      } catch (err) {
-        console.error("Signup error:", err);
-        res.status(500).send({ success: false, message: "Server error" });
-      }
-    });
-
-    //  User login
-    app.post('/login', async (req, res) => {
-      try {
-        const { useremail, password } = req.body;
-
-        if (!useremail || !password) {
-          return res.status(400).send({ success: false, message: "Email and password required" });
-        }
-
-        const user = await userinfoCollection.findOne({ useremail });
-
-        if (!user) {
-          return res.status(404).send({ success: false, message: "User not found" });
-        }
-
-        if (user.password !== password) {
-          return res.status(401).send({ success: false, message: "Incorrect password" });
-        }
-
-        res.send({
-          success: true,
-          message: "Login successful",
-          user: {
-            id: user._id,
-            username: user.username,
-            useremail: user.useremail,
-            image: user.image
-          }
-        });
-
-      } catch (err) {
-        console.error("Login error:", err);
-        res.status(500).send({ success: false, message: "Server error" });
-      }
-    });
-
-
+    // Create complaint
     app.post('/complaints', async (req, res) => {
       try {
         const { Title, Category, Location, Description, Image, Amount, Date, AddedBy, Status } = req.body;
-
-        if (!Title || !Category || !Location || !Description || !Amount || !Date || !Status) {
+        if (!Title || !Category || !Location || !Description || !Amount || !Date || !Status)
           return res.status(400).send({ success: false, message: "All fields required" });
-        }
 
-        const existingComplaint = await complaintsCollection.findOne({ Title });
-        if (existingComplaint) {
-          return res.status(409).send({ success: false, message: "Issue already exists" });
-        }
+        const existing = await complaintsCollection.findOne({ Title });
+        if (existing) return res.status(409).send({ success: false, message: "Issue already exists" });
 
-        // insert new user
-        await complaintsCollection.insertOne({ Title, Category, Location, Description, Image, Amount, Date, AddedBy, Status });
+        await complaintsCollection.insertOne({ Title, Category, Location, Description, Image, Amount: Number(Amount), FundCollected: 0, Date, AddedBy, Status });
         res.send({ success: true, message: "Issue added successfully" });
-
       } catch (err) {
-        console.error("Error:", err);
+        console.error(err);
         res.status(500).send({ success: false, message: "Server error" });
       }
     });
-
-    // update er jonno
-    app.put("/complaints/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const updatedData = req.body;
-
-        const result = await complaintsCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: updatedData }
-        );
-
-        if (result.modifiedCount > 0) {
-          res.send({ success: true, message: "Issue updated successfully!" });
-        } else {
-          res.send({ success: false, message: "Nothing to update." });
-        }
-      } catch (error) {
-        console.error(error);
-        res.status(500).send({ success: false, message: "Server error" });
-      }
-    });
-
-
-
-    // Delete 
-    app.delete("/complaints/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-
-        if (!ObjectId.isValid(id)) {
-          return res.status(400).send({ success: false, message: "Invalid issue ID" });
-        }
-
-        const result = await complaintsCollection.deleteOne({ _id: new ObjectId(id) });
-
-        if (result.deletedCount > 0) {
-          res.send({ success: true, message: "Issue deleted successfully!" });
-        } else {
-          res.send({ success: false, message: "No issue found to delete." });
-        }
-      } catch (error) {
-        console.error("Delete error:", error);
-        res.status(500).send({ success: false, message: "Server error" });
-      }
-    });
-
-
 
     // Contribute to a complaint
     app.patch("/complaints/contribute/:id", async (req, res) => {
@@ -213,23 +84,22 @@ async function run() {
         const id = req.params.id;
         const { contribution, useremail } = req.body;
 
-        if (!ObjectId.isValid(id)) {
-          return res.status(400).send({ success: false, message: "Invalid issue ID" });
-        }
+        if (!ObjectId.isValid(id)) return res.status(400).send({ success: false, message: "Invalid issue ID" });
+        if (!contribution || Number(contribution) <= 0) return res.status(400).send({ success: false, message: "Invalid contribution" });
 
         const complaint = await complaintsCollection.findOne({ _id: new ObjectId(id) });
-        if (!complaint) {
-          return res.status(404).send({ success: false, message: "Issue not found" });
-        }
+        if (!complaint) return res.status(404).send({ success: false, message: "Issue not found" });
 
-        const fundCollected = (complaint.FundCollected || 0) + Number(contribution);
-        const remainingAmount = Math.max(complaint.Amount - Number(contribution), 0);
-
+        // Use $inc for atomic updates
         await complaintsCollection.updateOne(
           { _id: new ObjectId(id) },
-          { $set: { FundCollected: fundCollected, Amount: remainingAmount } }
+          {
+            $inc: {
+              FundCollected: Number(contribution),
+              Amount: -Number(contribution)
+            }
+          }
         );
-
 
         if (useremail) {
           const user = await userinfoCollection.findOne({ useremail });
@@ -246,6 +116,13 @@ async function run() {
           }
         }
 
+        // Save contribution record
+        await contributionCollection.insertOne({
+          Title: complaint.Title,
+          Category: complaint.Category,
+          PaidAmount: Number(contribution),
+          Paidby: useremail
+        });
 
         res.send({ success: true, message: "Contribution added successfully!" });
       } catch (error) {
@@ -254,99 +131,91 @@ async function run() {
       }
     });
 
+    // ------------------- User Routes -------------------
 
-
-
-
-
-    // Save contribution details to a new collection named "contribution"
-    app.post("/contribution", async (req, res) => {
+    app.post('/register', async (req, res) => {
       try {
-        const { Title, Category, PaidAmount, Paidby } = req.body;
+        const { username, useremail, password, image } = req.body;
+        if (!username || !useremail || !password) return res.status(400).send({ success: false, message: "All fields required" });
 
-        if (!Title || !Category || !PaidAmount || !Paidby) {
-          return res.status(400).send({ success: false, message: "All fields are required" });
-        }
+        const existingUser = await userinfoCollection.findOne({ useremail });
+        if (existingUser) return res.status(409).send({ success: false, message: "Email already exists" });
 
-        const contributionCollection = client.db("community").collection("contribution");
-
-        const newContribution = {
-          Title,
-          Category,
-          PaidAmount: Number(PaidAmount),
-          Paidby
-        };
-
-        await contributionCollection.insertOne(newContribution);
-
-        res.send({ success: true, message: "Contribution record added successfully!" });
-      } catch (error) {
-        console.error("Error saving contribution:", error);
+        await userinfoCollection.insertOne({ username, useremail, password, image, contributed: 0 });
+        res.send({ success: true, message: "User registered successfully" });
+      } catch (err) {
+        console.error(err);
         res.status(500).send({ success: false, message: "Server error" });
       }
     });
 
+    app.post('/login', async (req, res) => {
+      try {
+        const { useremail, password } = req.body;
+        if (!useremail || !password) return res.status(400).send({ success: false, message: "Email and password required" });
 
+        const user = await userinfoCollection.findOne({ useremail });
+        if (!user) return res.status(404).send({ success: false, message: "User not found" });
+        if (user.password !== password) return res.status(401).send({ success: false, message: "Incorrect password" });
+
+        res.send({ success: true, message: "Login successful", user });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ success: false, message: "Server error" });
+      }
+    });
+
+    app.get("/users/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const user = await userinfoCollection.findOne({ useremail: email }, { projection: { username: 1, useremail: 1, image: 1, contributed: 1 } });
+        if (!user) return res.status(404).send({ success: false, message: "User not found" });
+        res.send(user);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Server error" });
+      }
+    });
+
+    app.get("/userinfo", async (req, res) => {
+      try {
+        const users = await userinfoCollection.find().toArray();
+        res.send(users);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Server error" });
+      }
+    });
+
+    // ------------------- Contribution Routes -------------------
 
     app.get("/contribution/:email", async (req, res) => {
       try {
         const email = req.params.email;
-        const contributionsCollection = client.db("community").collection("contribution");
-        const userContributions = await contributionsCollection.find({ Paidby: email }).toArray();
-        if (!userContributions || userContributions.length === 0) {
-          return res.status(404).send({ success: false, message: "No contributions found" });
-        }
-        res.send(userContributions);
+        const contributions = await contributionCollection.find({ Paidby: email }).toArray();
+        if (!contributions.length) return res.status(404).send({ success: false, message: "No contributions found" });
+        res.send(contributions);
       } catch (error) {
-        console.error("Error fetching contributions:", error);
+        console.error(error);
         res.status(500).send({ success: false, message: "Server error" });
       }
     });
 
-
-
-// Get ALL contributions
-app.get("/contribution", async (req, res) => {
-  try {
-    const contributionCollection = client.db("community").collection("contribution");
-    const allContributions = await contributionCollection.find().toArray();
-    res.send(allContributions);
-  } catch (error) {
-    console.error("Error fetching contributions:", error);
-    res.status(500).send({ success: false, message: "Server error" });
-  }
-});
-
-
-// Get ALL users
-app.get("/userinfo", async (req, res) => {
-  try {
-    const users = await userinfoCollection.find().toArray();
-    res.send(users);
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    res.status(500).send({ success: false, message: "Server error" });
-  }
-});
-
-
-
-
-
-    // Test route
-    app.get('/', (req, res) => {
-      res.send('Server is running fine!');
+    app.get("/contribution", async (req, res) => {
+      try {
+        const allContributions = await contributionCollection.find().toArray();
+        res.send(allContributions);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Server error" });
+      }
     });
 
-    // MongoDB ping test
-    await client.db("admin").command({ ping: 1 });
-    console.log("Connected to MongoDB successfully!");
+    // ------------------- Start Server -------------------
+    app.listen(port, () => console.log(`Server listening on port ${port}`));
   } catch (err) {
     console.error("MongoDB connection error:", err);
   }
 }
-run().catch(console.dir);
 
-app.listen(port, () => {
-  console.log(`Server is listening on port ${port}`);
-});
+startServer();
