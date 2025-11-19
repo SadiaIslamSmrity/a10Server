@@ -33,7 +33,7 @@ async function startServer() {
     // Test route
     app.get('/', (req, res) => res.send('Server is running fine!'));
 
-    // ------------------- Complaints Routes -------------------
+    // Complaints Routes 
 
     // Get single complaint
     app.get("/complaints/:id", async (req, res) => {
@@ -90,7 +90,7 @@ async function startServer() {
         const complaint = await complaintsCollection.findOne({ _id: new ObjectId(id) });
         if (!complaint) return res.status(404).send({ success: false, message: "Issue not found" });
 
-        // Use $inc for atomic updates
+        
         await complaintsCollection.updateOne(
           { _id: new ObjectId(id) },
           {
@@ -116,7 +116,7 @@ async function startServer() {
           }
         }
 
-        // Save contribution record
+        //  contribution 
         await contributionCollection.insertOne({
           Title: complaint.Title,
           Category: complaint.Category,
@@ -130,8 +130,57 @@ async function startServer() {
         res.status(500).send({ success: false, message: "Server error" });
       }
     });
+// Update complaint 
+app.put("/complaints/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const updateData = req.body; 
 
-    // ------------------- User Routes -------------------
+    
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ success: false, message: "Invalid ID" });
+    }
+
+    delete updateData._id;
+
+    const result = await complaintsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ success: false, message: "Complaint not found" });
+    }
+
+    res.send({ success: true, message: "Issue updated successfully!" });
+  } catch (err) {
+    console.error("Update error:", err);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
+// Delete complaint 
+app.delete("/complaints/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ success: false, message: "Invalid ID" });
+    }
+
+    const result = await complaintsCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ success: false, message: "Complaint not found" });
+    }
+
+    res.send({ success: true, message: "Issue deleted successfully!" });
+  } catch (err) {
+    console.error("Delete error:", err);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
+
+    // User Routes 
 
     app.post('/register', async (req, res) => {
       try {
@@ -187,7 +236,7 @@ async function startServer() {
       }
     });
 
-    // ------------------- Contribution Routes -------------------
+    //  Contribution Routes 
 
     app.get("/contribution/:email", async (req, res) => {
       try {
@@ -211,7 +260,7 @@ async function startServer() {
       }
     });
 
-    // ------------------- Start Server -------------------
+    // Start Server 
     app.listen(port, () => console.log(`Server listening on port ${port}`));
   } catch (err) {
     console.error("MongoDB connection error:", err);
