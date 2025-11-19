@@ -305,6 +305,29 @@ async function run() {
 
 
 
+// Get ALL contributions
+app.get("/contribution", async (req, res) => {
+  try {
+    const contributionCollection = client.db("community").collection("contribution");
+    const allContributions = await contributionCollection.find().toArray();
+    res.send(allContributions);
+  } catch (error) {
+    console.error("Error fetching contributions:", error);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
+
+
+// Get ALL users
+app.get("/userinfo", async (req, res) => {
+  try {
+    const users = await userinfoCollection.find().toArray();
+    res.send(users);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
 
 
 
